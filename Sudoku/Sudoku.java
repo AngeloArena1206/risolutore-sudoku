@@ -22,6 +22,7 @@ public class Sudoku {
     private Riga righe[];
     private Colonna colonne[];
     private Tabella tabelle[];
+    private boolean solo_logica=false;//true nelle copie create da ipotesi(): risolvo() usa solo le tecniche logiche
     public void set_LATO(int LATO) {
         this.LATO = LATO;
         lato = (int) Math.sqrt(LATO);
@@ -312,13 +313,19 @@ public class Sudoku {
             return risolvo(0);
         if(x_wing())
             return risolvo(0);
+        if(remote_pairs())//va prima di colore: dopo colore e' inefficace
+            return risolvo(0);
         if(colore())
             return risolvo(0);
         if(xy_wing())
             return risolvo(0);
         if(sky_screaper())
             return risolvo(0);
-        if(finito()==false && tentativi())//ultima risorsa
+        if(xy_wing_generalizzato())//generalizzazione di xy_wing (catena xy)
+            return risolvo(0);
+        if(solo_logica==false && ipotesi())//nelle copie create da ipotesi() non si fanno ne' ipotesi ne' tentativi
+            return risolvo(0);
+        if(solo_logica==false && finito()==false && tentativi())//ultima risorsa
             return risolvo(0);
         if(finito()==false)
             System.out.println("Con le tecniche a disposizione non sono in grado di risolvere il sudoku");
@@ -419,10 +426,26 @@ public class Sudoku {
         Metodi.get_colonna(cella.get_colonna(),sudoku).x_wing(numero,sudoku);
     }
     public static void post_xy_wing(int numero,Cella celle[],Cella sudoku[][]){
-        return;
+        post_x_wing(numero,celle,sudoku);
+        for(int i=0;i<celle.length;i++)//una cella rimasta con due candidati puo' essere il perno di un nuovo xy-wing
+            if(celle[i]!=null && celle[i].get_numero()==0 && celle[i].get_candidati().length==2)
+                celle[i].xy_wing(sudoku);
     }
-    public static void post_ipotesi(Cella celle[],Cella sudoku[][]){
-        post_x_wing(celle,sudoku);
+    public static void post_xy_wing_generalizzato(int numero,Cella celle[],Cella sudoku[][]){
+        post_xy_wing(numero,celle,sudoku);
+        for(int i=0;i<celle.length;i++)//si riprova la catena xy partendo dalle celle rimaste con due candidati
+            if(celle[i]!=null && celle[i].get_numero()==0 && celle[i].get_candidati().length==2){
+                Gruppo gruppo=celle[i].creo_catena_xy_wing(sudoku);
+                boolean applicato=gruppo.xy_wing_generalizzato(sudoku);
+                Cella celle_modificate[]=gruppo.get_celle_modificate();
+                int numero_rimosso=gruppo.get_numero_rimosso();
+                gruppo.distruggo_gruppo();//il gruppo va distrutto prima di invocare la post-tecnica (che crea altri gruppi)
+                if(applicato)
+                    post_xy_wing_generalizzato(numero_rimosso,celle_modificate,sudoku);
+            }
+    }
+    public static void post_ipotesi(int numero,Cella celle[],Cella sudoku[][]){
+        post_xy_wing_generalizzato(numero,celle,sudoku);
     }
     //TECNICHE RISOLUTIVE
     public boolean esclusione() {//VERIFICATA
@@ -685,54 +708,88 @@ public class Sudoku {
             }
         return applicato;
     }
-    /*
+    /**
+     * Ipotesi su una cella con due candidati: si prova ogni candidato su una copia del sudoku risolta con le sole tecniche logiche.
+     * - se entrambe le copie diventano assurde il sudoku e' impossibile;
+     * - se una sola copia diventa assurda nella cella va l'altro candidato;
+     * - altrimenti, se un numero va nella cella k della prima copia e nella cella h della seconda,
+     *   il numero non puo' andare nelle celle viste sia da k che da h (se k==h nelle celle viste da k).
+     * @return true se ha inserito un numero o rimosso un candidato
+     */
     public boolean ipotesi(){
-        boolean applicato=false;
         for(int i=0;i<LATO;i++)
             for(int j=0;j<LATO;j++){
-                Gruppo gruppo=celle[i][j].creo_catena(this.celle);//crea un gruppo con prima cella celle[i][j] di tutte celle comunicanti e con due candidati
-                if(gruppo!=null){
-                    System.out.println("Faccio ipotesi partendo dalla cella: "+(i*LATO+j));
-                    stampo();
-                    Gruppo gruppo1=gruppo.creo_identico(),gruppo2=new gruppo.creo_identico();
-                    gruppo1.set_numero(celle[i][j].get_candidati()[0],0);
-                    gruppo2.set_numero(celle[i][j].get_candidati()[1],0);
-                    gruppo1.risolvo(celle);
-                    gruppo2.risolvo(celle);
-
-                        if(gruppo1.assurdo() && gruppo2.assurdo()){
-                            System.out.println("Facendo ipotesi mi sono accorto che il sudoku è impossibile perche nella cella non ci possono andare entrambi i candidati")
-                        }else if(gruppo1.assurdo()){
-                            System.out.println("Applicato ipotesi alla cella il numero "+celle[i][j].get_candidati()[0]+" inserisco numero "+celle[i][j].get_candidati()[1]);
-                            set_numero(celle[i][j].get_candidati()[1]);
-                        }else if(gruppo1.assurdo()){
-                            System.out.println("Applicato ipotesi alla cella il numero "+celle[i][j].get_candidati()[1]+" inserisco numero "+celle[i][j].get_candidati()[0]);
-                            set_numero(celle[i][j].get_candidati()[0]);
-                        }else{//se entrambi i grupi non sono assurdi
-                            Cella vettore_di_celle[]=new Cella[3*LATO];
-                            for(int k=0;k<gruppo1.get_celle().length;k++)
-                                if(gruppo1.get_cella(k).get_numero()!=0)
-                                    for(int h=0;h<gruppo2.get_celle().length;h++)
-                                        if(gruppo2.get_cella(h).get_numero()==gruppo1.get_cella(k).get_numero()){
-                                            Cella celle_comune[]=gruppo1.get_cella(k).celle_in_comune(gruppo2.get_cella(h),this.celle);
-                                            int cont=0;
-                                            for(int q=0;q<celle_comune.length;q++)
-                                                if(celle_comune[q].rimuovi_candidato(gruppo1.get_cella(k).get_numero())){
-                                                    System.out.println("Applicato ipotesi il numero "+gruppo1.get_cella(k).get_numero+" non puo andare nella cella "+celle_comune[q].get_posiz());
-                                                    vettore_di_celle[cont++]=celle_comune[q];//si segna tutte le celle da cui è stato rimosso un candidato
-                                                }
-                                        }
-                            Sudoku.post_ipotesi(vettore_di_celle,sudoku);
+                if(celle[i][j].get_numero()!=0 || celle[i][j].get_candidati().length!=2)
+                    continue;
+                int candidati[]=celle[i][j].get_candidati().clone();
+                Sudoku ipotesi1=prova_ipotesi(i,j,candidati[0]),ipotesi2=prova_ipotesi(i,j,candidati[1]);
+                boolean assurdo1=ipotesi1.assurdo_silenzioso(),assurdo2=ipotesi2.assurdo_silenzioso();
+                if(assurdo1 && assurdo2){
+                    System.out.println("Facendo ipotesi mi sono accorto che il sudoku e' impossibile perche' nella cella "+celle[i][j].get_posiz()+" non ci puo' andare nessuno dei due candidati");
+                    celle[i][j].rimuovi_candidato(candidati);//la cella resta senza candidati: risolvo() se ne accorge con assurdo()
+                    return true;
+                }
+                if(assurdo1 || assurdo2){
+                    int giusto=assurdo1 ? candidati[1] : candidati[0],sbagliato=assurdo1 ? candidati[0] : candidati[1];
+                    System.out.println("Applicato ipotesi: mettendo il "+sbagliato+" nella cella "+celle[i][j].get_posiz()+" il sudoku diventa impossibile, quindi inserisco il "+giusto);
+                    Cella vet_celle[]=set_numero(i,j,giusto);
+                    Sudoku.post_ipotesi(giusto,vet_celle,this.celle);
+                    return true;
+                }
+                //entrambe le ipotesi sono possibili
+                Cella vettore_di_celle[][]=new Cella[LATO+1][LATO*LATO];//vettore_di_celle[numero] contiene le celle da cui e' stato rimosso numero
+                int cont[]=new int[LATO+1];
+                boolean applicato=false;
+                for(int k=0;k<LATO*LATO;k++){
+                    int numero=ipotesi1.get_cella(k).get_numero();
+                    if(numero==0 || get_cella(k).get_numero()!=0)
+                        continue;
+                    for(int h=0;h<LATO*LATO;h++)
+                        if(ipotesi2.get_cella(h).get_numero()==numero && get_cella(h).get_numero()==0){
+                            Cella celle_comune[]=get_cella(k).celle_in_comune(get_cella(h),this.celle);
+                            for(int q=0;q<celle_comune.length;q++)
+                                if(celle_comune[q].rimuovi_candidato(numero)){
+                                    System.out.println("Applicato ipotesi (cella "+celle[i][j].get_posiz()+"): il "+numero+" non puo' andare nella cella "+celle_comune[q].get_posiz());
+                                    if(cont[numero]<LATO*LATO)
+                                        vettore_di_celle[numero][cont[numero]++]=celle_comune[q];
+                                    applicato=true;
+                                }
                         }
-                    
-                    for(int k=0;k<LATO;k++)
-                        for(int h=0;h<LATO;h++)
-                            if(celle[k][h].get_carattere()=='A')
-                                celle[k][h].set_carattere('-');
+                }
+                if(applicato){
+                    for(int numero=1;numero<=LATO;numero++)
+                        if(cont[numero]>0)
+                            Sudoku.post_ipotesi(numero,Metodi.accorcio_lunghezza(vettore_di_celle[numero],cont[numero]),this.celle);
+                    return true;
                 }
             }
-        return applicato;
-    }*/
+        return false;
+    }
+    /**
+     * Crea una copia del sudoku, inserisce numero nella cella (i,j) e la risolve con le sole tecniche logiche senza stampare nulla
+     */
+    private Sudoku prova_ipotesi(int i,int j,int numero){
+        Sudoku prova=copia();
+        prova.solo_logica=true;
+        java.io.PrintStream schermo=System.out;
+        try{
+            System.setOut(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));
+            prova.set_numero(i,j,numero);
+            prova.risolvo();
+        }finally{
+            System.setOut(schermo);
+        }
+        return prova;
+    }
+    private boolean assurdo_silenzioso(){
+        java.io.PrintStream schermo=System.out;
+        try{
+            System.setOut(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()));
+            return assurdo();
+        }finally{
+            System.setOut(schermo);
+        }
+    }
     /**
      * Crea una copia indipendente del sudoku (celle nuove con gli stessi numeri e candidati)
      */
@@ -803,62 +860,70 @@ public class Sudoku {
         return false;
     }
     public boolean remote_pairs(){// non ha senso metterlo dopo colore perchè fare prima colore rende inefficace remote_pairs()
-        boolean applicato=false;
         for(int i=0;i<LATO;i++)
             for(int j=0;j<LATO;j++){
-                Gruppo gruppo=celle[i][j].creo_catena_remote_pairs(this.celle);//Gruppo è una catena di A e B che 
-                if(gruppo!=null){//con una catena di tre celle non si fa nulla
-                    stampo();
-                    if(gruppo.get_celle().length>=4){
+                if(celle[i][j].get_numero()!=0)
+                    continue;
+                Gruppo gruppo=celle[i][j].creo_catena_remote_pairs(this.celle);//Gruppo è una catena di A e B: le celle con la stessa lettera hanno lo stesso numero
+                if(gruppo==null)
+                    continue;
+                int vet_num[]=celle[i][j].get_candidati().clone();
+                Cella vettore_di_celle[]=new Cella[LATO*LATO];
+                int cont=0;
+                boolean impossibile=false;
+                if(gruppo.get_celle().length>=4){//con una catena di tre celle non si fa nulla
                     //controllo se ci sono due A o due B che si vedono
-                        for(int k=0;k<gruppo.get_celle().length;k++)
-                            for(int h=0;h<gruppo.get_cella(k).get_celle_gruppo_viste().length;h++)
-                                if(gruppo.get_cella(k).get_carattere()==gruppo.get_cella(k).get_cella_gruppo_vista(h).get_carattere()){
-                                    System.out.println("Il sudoku e' impossibile perche' la lettera "+gruppo.get_cella(k).get_carattere()+" si autovede");
-                                    System.exit(0);
-                                }
-                        Cella vettore_di_celle[]=new Cella[LATO*LATO];
-                        int cont=0;
-                        for(int k=0;k<gruppo.get_celle().length-1;k++){
-                            for(int h=k+1;h<gruppo.get_celle().length;h++){//se in gruppo.get_cella(k) ce la A nelle altrre celle viste c'è la B
-                                if(gruppo.get_cella(k).get_carattere()==Metodi.inverto_A(gruppo.get_cella(h).get_carattere())){
-                                    Cella celle_comune[]=gruppo.get_cella(k).celle_in_comune(gruppo.get_cella(h),this.celle);
-                                    for(int q=0;q<celle_comune.length;q++)
-                                        if(celle_comune[q].rimuovi_candidato(celle[i][j].get_candidati()).length>0){
-                                            System.out.println("Applicato remote pairs i numeri non possono andare nella cella "+celle_comune[q].get_posiz());
-                                            vettore_di_celle[cont++]=celle_comune[q];//è inutile dire che celle_comune[q] puo essere inserito in vettore_di_celle solo se non è gia stato inserito
-                                            applicato=true;
-                                        }
-                                }
+                    for(int k=0;k<gruppo.get_celle().length && impossibile==false;k++)
+                        for(int h=0;h<gruppo.get_cella(k).get_celle_gruppo_viste().length && impossibile==false;h++)
+                            if(gruppo.get_cella(k).get_carattere()==gruppo.get_cella(k).get_cella_gruppo_vista(h).get_carattere()){
+                                System.out.println("Il sudoku e' impossibile perche' la lettera "+gruppo.get_cella(k).get_carattere()+" si autovede");
+                                impossibile=true;
                             }
-                            gruppo.get_cella(k).set_carattere('-');
-                        }
-                        gruppo.get_cella(gruppo.get_celle().length-1).set_carattere('-');
-                        if(cont>0)
-                            Sudoku.post_remote_pairs(celle[i][j].get_candidati(),vettore_di_celle,this.celle);
-                    }
-                    gruppo.distruggo_gruppo();//resetta gli attributi celle_gruppo e celle_gruppo_viste delle celle del gruppo
-                }   
+                    for(int k=0;k<gruppo.get_celle().length-1 && impossibile==false;k++)
+                        for(int h=k+1;h<gruppo.get_celle().length;h++)//se in gruppo.get_cella(k) ce la A nelle altrre celle viste c'è la B
+                            if(gruppo.get_cella(k).get_carattere()==Metodi.inverto_A(gruppo.get_cella(h).get_carattere())){
+                                Cella celle_comune[]=gruppo.get_cella(k).celle_in_comune(gruppo.get_cella(h),this.celle);
+                                for(int q=0;q<celle_comune.length;q++)
+                                    if(celle_comune[q].rimuovi_candidato(vet_num).length>0){
+                                        System.out.println("Applicato remote pairs i numeri "+vet_num[0]+" "+vet_num[1]+" non possono andare nella cella "+celle_comune[q].get_posiz());
+                                        if(cont<vettore_di_celle.length)
+                                            vettore_di_celle[cont++]=celle_comune[q];
+                                    }
+                            }
+                }
+                for(int k=0;k<gruppo.get_celle().length;k++)//cancello sempre le lettere della catena
+                    gruppo.get_cella(k).set_carattere('-');
+                Cella celle_gruppo[]=gruppo.get_celle();
+                gruppo.distruggo_gruppo();//resetta gli attributi celle_gruppo e celle_gruppo_viste delle celle del gruppo
+                if(impossibile){
+                    celle_gruppo[0].rimuovi_candidato(vet_num);//la cella resta senza candidati: risolvo() se ne accorge con assurdo()
+                    return true;
+                }
+                if(cont>0){
+                    Sudoku.post_remote_pairs(vet_num,Metodi.accorcio_lunghezza(vettore_di_celle,cont),this.celle);
+                    return true;
+                }
             }
-        return applicato;
+        return false;
     }
     public boolean xy_wing_generalizzato(){
-        Cella vet[]=new Cella[LATO*LATO];
-        boolean applicato=false;
-        for(int i=0;i<LATO*LATO;i++)
-            vet[i]=celle[(int)i/LATO][i%LATO];
-        for(int i=0;i<vet.length;i++){
-            Gruppo gruppo=vet[i].creo_catena_xy_wing(this.celle);
-            if(gruppo!=null){
-                gruppo.stampo();
-                if(gruppo.xy_wing_generalizzato(celle)){
-                    i=-1;
-                    vet=Metodi.rimuovo_celle_al_vettore(vet,gruppo.get_celle());
-                    applicato=true;
-                }
-                gruppo.distruggo_gruppo();//sistema le celle_gruppo delle varie celle
+        boolean visitata[]=new boolean[LATO*LATO];//le celle di una catena gia' provata non fanno ripartire la stessa catena
+        for(int k=0;k<LATO*LATO;k++){
+            Cella cella=get_cella(k);
+            if(visitata[k] || cella.get_numero()!=0 || cella.get_candidati().length!=2)
+                continue;
+            Gruppo gruppo=cella.creo_catena_xy_wing(this.celle);
+            for(int q=0;q<gruppo.get_celle().length;q++)
+                visitata[gruppo.get_cella(q).get_posiz()]=true;
+            boolean applicato=gruppo.xy_wing_generalizzato(this.celle);
+            Cella celle_modificate[]=gruppo.get_celle_modificate();
+            int numero=gruppo.get_numero_rimosso();
+            gruppo.distruggo_gruppo();//sistema le celle_gruppo delle varie celle
+            if(applicato){
+                Sudoku.post_xy_wing_generalizzato(numero,celle_modificate,this.celle);
+                return true;
             }
         }
-        return applicato;
+        return false;
     }
 }

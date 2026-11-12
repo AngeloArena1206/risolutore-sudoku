@@ -256,27 +256,79 @@ public class Gruppo{//PUO ESSERE UNA SETTORE O ALTRO
     }
     //TECNICHE RISOLUTIVE
     
+    private Cella celle_modificate[]=new Cella[0];//celle da cui xy_wing_generalizzato() ha rimosso numero_rimosso
+    private int numero_rimosso=0;
+    public Cella[] get_celle_modificate(){
+        return celle_modificate;
+    }
+    public int get_numero_rimosso(){
+        return numero_rimosso;
+    }
+    /**
+     * Xy-wing generalizzato (catena xy) sul gruppo creato da Cella.creo_catena_xy_wing().
+     * Si parte da una cella inizio con candidati {x,a} e si suppone che inizio non sia x: allora inizio vale a,
+     * una cella vista {a,b} vale b, una cella vista {b,c} vale c, ecc. Se si arriva ad una cella fine che vale x
+     * allora o inizio o fine contiene x, quindi x non puo' andare nelle celle viste sia da inizio che da fine.
+     * L'xy-wing e' la catena di tre celle (ala-perno-ala).
+     * Le celle della catena devono vedersi (celle_gruppo_viste) e avere due candidati.
+     * @return true se ha rimosso un candidato (si ferma alla prima applicazione)
+     */
     public boolean xy_wing_generalizzato(Cella sudoku[][]){
-        boolean applicato=false;
-        for(int i=0;i<celle.length-2;i++){//faccio partire catena con primo elemento celle[i](che sarà l'ala)
-            Cella celle_gruppo_viste[]=celle[i].get_celle_gruppo_viste();
-            for(int j=0;j<celle_gruppo_viste.length;j++){
-                if(celle[i].xy_wing(celle_gruppo_viste[j],sudoku))//celle[i] è il perno mentre celle[i].get_cella_gruppo_vista(j) è l'ala
-                    applicato=true;
-                for(int k=0;k<celle_gruppo_viste[j].get_celle_gruppo_viste().length;k++){
-                    int perno=Metodi.get_perno(celle_gruppo_viste[j],celle_gruppo_viste[j].get_cella_gruppo_vista(k));
-                    int vet[]=Metodi.get_ali(celle_gruppo_viste[j],celle_gruppo_viste[j].get_cella_gruppo_vista(k));
-                    if(Metodi.uguali(vet,celle[i].get_candidati())==false){
-                        Cella sudoku1[][]=sudoku;
-                        Cella cella_gruppo_vista=celle_gruppo_viste[j].get_celle_gruppo_viste()[k];
-                        sudoku1[Metodi.get_riga(cella_gruppo_vista,LATO)][Metodi.get_colonna(cella_gruppo_vista,LATO)].set_candidati(vet);
-                        if(celle[i].xy_wing(cella_gruppo_vista,sudoku1))
-                            applicato=true;
+        celle_modificate=new Cella[0];
+        numero_rimosso=0;
+        for(int i=0;i<celle.length;i++){
+            Cella inizio=celle[i];
+            if(inizio.get_numero()!=0 || inizio.get_candidati().length!=2)
+                continue;
+            for(int c=0;c<2;c++){
+                int x=inizio.get_candidati()[c];
+                //visita in ampiezza: coda[k] vale forzato[k] se inizio non vale x; lunghezza[k] e' il numero di celle della catena
+                Cella coda[]=new Cella[2*celle.length];
+                int forzato[]=new int[2*celle.length],lunghezza[]=new int[2*celle.length];
+                boolean visitato[][]=new boolean[LATO*LATO][LATO+1];
+                int n=0;
+                coda[n]=inizio;
+                forzato[n]=inizio.get_candidati()[1-c];
+                lunghezza[n++]=1;
+                visitato[inizio.get_posiz()][forzato[0]]=true;
+                for(int k=0;k<n;k++){
+                    Cella viste[]=coda[k].get_celle_gruppo_viste();
+                    if(viste==null)
+                        continue;
+                    for(int h=0;h<viste.length;h++){
+                        Cella cella=viste[h];
+                        if(cella==inizio || cella.get_numero()!=0 || cella.get_candidati().length!=2 || cella.ci_puo_andare(forzato[k])==false)
+                            continue;
+                        int altro=cella.get_candidati()[0]==forzato[k] ? cella.get_candidati()[1] : cella.get_candidati()[0];
+                        if(visitato[cella.get_posiz()][altro])
+                            continue;
+                        visitato[cella.get_posiz()][altro]=true;
+                        if(altro==x && lunghezza[k]+1>=3 && rimuovo_xy_wing_generalizzato(x,inizio,cella,lunghezza[k]+1,sudoku))
+                            return true;
+                        if(n<coda.length){
+                            coda[n]=cella;
+                            forzato[n]=altro;
+                            lunghezza[n++]=lunghezza[k]+1;
+                        }
                     }
                 }
             }
-
         }
-        return applicato;
+        return false;
+    }
+    private boolean rimuovo_xy_wing_generalizzato(int x,Cella inizio,Cella fine,int lunghezza,Cella sudoku[][]){
+        Cella celle_comune[]=inizio.celle_in_comune(fine,sudoku);
+        Cella vet[]=new Cella[celle_comune.length];
+        int cont=0;
+        for(int q=0;q<celle_comune.length;q++)
+            if(celle_comune[q].rimuovi_candidato(x)){
+                System.out.println("Applicato xy-wing generalizzato (catena di "+lunghezza+" celle da "+inizio.get_posiz()+" a "+fine.get_posiz()+"): il "+x+" non puo' andare nella cella "+celle_comune[q].get_posiz());
+                vet[cont++]=celle_comune[q];
+            }
+        if(cont==0)
+            return false;
+        celle_modificate=Metodi.accorcio_lunghezza(vet,cont);
+        numero_rimosso=x;
+        return true;
     }
 }
