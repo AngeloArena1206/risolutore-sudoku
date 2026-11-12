@@ -13,25 +13,38 @@ import java.util.Scanner;
  * The order is:
  * <ol>
  *   <li>Hidden Single</li>
- *   <li>Locked Candidates (Pointing / Claiming)</li>
  *   <li>Naked Single</li>
+ *   <li>Locked Candidates (Pointing / Claiming)</li>
  *   <li>Naked and Hidden Subsets (pairs, triples, quads)</li>
  *   <li>X-Wing / Swordfish / Jellyfish</li>
+ *   <li>Unique Rectangle (types 1, 2, 4)</li>
  *   <li>Remote Pairs</li>
- *   <li>Simple Colouring</li>
- *   <li>XY-Wing</li>
  *   <li>Skyscraper</li>
+ *   <li>Two-String Kite</li>
+ *   <li>Finned / Sashimi X-Wing and Swordfish</li>
+ *   <li>Simple Colouring</li>
+ *   <li>W-Wing</li>
+ *   <li>XY-Wing</li>
+ *   <li>XYZ-Wing</li>
+ *   <li>Multi-Coloring</li>
+ *   <li>X-Cycles</li>
  *   <li>XY-Chain</li>
- *   <li>Forcing Chains on bivalue cells (second-to-last resort)</li>
+ *   <li>AIC (Alternating Inference Chains)</li>
+ *   <li>ALS-XZ</li>
+ *   <li>Forcing Chains (assumptions propagated with singles only)</li>
+ *   <li>Forcing Net on bivalue cells (assumptions propagated with every technique, second-to-last resort)</li>
  *   <li>Trial and Error (last resort)</li>
  * </ol>
+ * The order follows the usual difficulty ratings of the techniques (e.g. the scores used by HoDoKu).
+ * The advanced pattern techniques are in {@link Patterns}, the chain techniques in {@link Chains}.
  *
  * <h2>Post-techniques</h2>
  * When a technique removes some candidates, the corresponding static {@code postXxx} method re-applies the
  * simpler techniques only around the cells that changed (e.g. after an X-Wing removes digit 5 from some cells,
  * the houses of those cells are checked again for hidden singles, locked candidates and subsets of 5).
  * Each post-technique calls the post-technique of the previous technique, so they form a cascade:
- * postHiddenSingle &lt; postLockedCandidates &lt; postSubsets &lt; postXWing &lt; postXyWing &lt; postXyChain &lt; postForcingChain.
+ * postHiddenSingle &lt; postLockedCandidates &lt; postSubsets &lt; postXWing &lt; postXyWing &lt; postXyChain &lt; postForcingNet.
+ * The post-techniques of the advanced techniques plug into this cascade.
  */
 public class Sudoku {
     /**
@@ -56,7 +69,7 @@ public class Sudoku {
     private Row rows[];
     private Column columns[];
     private Box boxes[];
-    private boolean logicOnly=false;//true in the copies created by forcingChain(): solve() then uses only the logical techniques
+    private boolean logicOnly=false;//true in the copies created by forcingNet(): solve() then uses only the logical techniques
 
     public void setSize(int size) {
         this.size = size;
@@ -83,6 +96,10 @@ public class Sudoku {
     public void setCells(Cell cells[][]){
         this.cells=cells;
         linkHouses();
+    }
+    /** @return the grid of cells (used by the advanced techniques to call the post-techniques) */
+    Cell[][] getGrid() {
+        return cells;
     }
     public Cell getCell(int position) {
         return cells[position / size][position % size];
@@ -398,31 +415,52 @@ public class Sudoku {
      * @return true if the sudoku has been solved
      */
     public boolean solve(){
-        if(hasContradiction()){//happens only in the copies made by trialAndError()/forcingChain() with a wrong digit (or if the input is invalid)
+        if(hasContradiction()){//happens only in the copies made by trialAndError()/forcingNet() with a wrong digit (or if the input is invalid)
             System.out.println("The sudoku has no solution");
             return false;
         }
+        //the techniques are tried in increasing order of difficulty
         if(hiddenSingle())
-            return solveAgain();
-        if(lockedCandidates())
             return solveAgain();
         if(nakedSingle())
             return solveAgain();
+        if(lockedCandidates())
+            return solveAgain();
         if(subsets())
             return solveAgain();
-        if(xWing())
+        if(xWing())//X-Wing, Swordfish, Jellyfish
+            return solveAgain();
+        if(new Patterns(this).uniqueRectangle())
             return solveAgain();
         if(remotePairs())//must come before simple colouring, which would make it useless
             return solveAgain();
+        if(skyscraper())
+            return solveAgain();
+        if(new Patterns(this).twoStringKite())
+            return solveAgain();
+        if(new Patterns(this).finnedFish())
+            return solveAgain();
         if(simpleColoring())
+            return solveAgain();
+        if(new Patterns(this).wWing())
             return solveAgain();
         if(xyWing())
             return solveAgain();
-        if(skyscraper())
+        if(new Patterns(this).xyzWing())
+            return solveAgain();
+        if(new Patterns(this).multiColoring())
+            return solveAgain();
+        if(new Chains(this).xCycles())
             return solveAgain();
         if(xyChain())//generalisation of the XY-Wing
             return solveAgain();
-        if(logicOnly==false && forcingChain())//second-to-last resort; the copies created by forcingChain() use only logic
+        if(new Chains(this).aic())
+            return solveAgain();
+        if(new Chains(this).alsXz())
+            return solveAgain();
+        if(new Chains(this).forcingChains())
+            return solveAgain();
+        if(logicOnly==false && forcingNet())//second-to-last resort; the copies created by forcingNet() use only logic
             return solveAgain();
         if(logicOnly==false && isSolved()==false && trialAndError())//last resort
             return solveAgain();
@@ -577,10 +615,70 @@ public class Sudoku {
             }
     }
     /**
+     * After the Forcing Net: the XY-Chain post-technique (which includes all the previous ones).
+     */
+    public static void postForcingNet(int number,Cell cells[],Cell grid[][]){
+        postXyChain(number,cells,grid);
+    }
+    /**
      * After Forcing Chains: the XY-Chain post-technique (which includes all the previous ones).
      */
-    public static void postForcingChain(int number,Cell cells[],Cell grid[][]){
+    public static void postForcingChains(int number,Cell cells[],Cell grid[][]){
         postXyChain(number,cells,grid);
+    }
+    /**
+     * After a Unique Rectangle: the X-Wing post-technique (singles, locked candidates, subsets and fish around the cells).
+     */
+    public static void postUniqueRectangle(int number,Cell cells[],Cell grid[][]){
+        postXWing(number,cells,grid);
+    }
+    /**
+     * After a Two-String Kite: the X-Wing post-technique (the kite is a single digit pattern, like the fish).
+     */
+    public static void postTwoStringKite(int number,Cell cells[],Cell grid[][]){
+        postXWing(number,cells,grid);
+    }
+    /**
+     * After a Finned / Sashimi Fish: the X-Wing post-technique, which also tries the basic fish again.
+     */
+    public static void postFinnedFish(int number,Cell cells[],Cell grid[][]){
+        postXWing(number,cells,grid);
+    }
+    /**
+     * After a Multi-Coloring: the X-Wing post-technique (single digit technique).
+     */
+    public static void postMultiColoring(int number,Cell cells[],Cell grid[][]){
+        postXWing(number,cells,grid);
+    }
+    /**
+     * After an X-Cycle: the X-Wing post-technique (single digit technique).
+     */
+    public static void postXCycles(int number,Cell cells[],Cell grid[][]){
+        postXWing(number,cells,grid);
+    }
+    /**
+     * After a W-Wing: the XY-Wing post-technique (the cells left with two candidates are tried as pivots).
+     */
+    public static void postWWing(int number,Cell cells[],Cell grid[][]){
+        postXyWing(number,cells,grid);
+    }
+    /**
+     * After an XYZ-Wing: the XY-Wing post-technique.
+     */
+    public static void postXyzWing(int number,Cell cells[],Cell grid[][]){
+        postXyWing(number,cells,grid);
+    }
+    /**
+     * After an AIC: the XY-Wing post-technique.
+     */
+    public static void postAic(int number,Cell cells[],Cell grid[][]){
+        postXyWing(number,cells,grid);
+    }
+    /**
+     * After an ALS-XZ: the XY-Wing post-technique.
+     */
+    public static void postAlsXz(int number,Cell cells[],Cell grid[][]){
+        postXyWing(number,cells,grid);
     }
 
     // ------------------------------------------------------------------
@@ -883,8 +981,8 @@ public class Sudoku {
         return applied;
     }
     /**
-     * FORCING CHAINS on bivalue cells (strictly speaking "cell forcing nets", since every branch is propagated
-     * with all the logical techniques). For each empty cell with two candidates, each candidate is tried on a
+     * FORCING NET on bivalue cells (the old "ipotesi"): unlike {@link Chains#forcingChains()}, every branch is
+     * propagated with ALL the logical techniques. For each empty cell with two candidates, each candidate is tried on a
      * copy of the sudoku solved with the logical techniques only:
      * <ul>
      *   <li>if both copies end in a contradiction the sudoku has no solution;</li>
@@ -895,7 +993,7 @@ public class Sudoku {
      * </ul>
      * @return true if a digit has been placed or a candidate removed
      */
-    public boolean forcingChain(){
+    public boolean forcingNet(){
         for(int i=0;i<size;i++)
             for(int j=0;j<size;j++){
                 if(cells[i][j].getNumber()!=0 || cells[i][j].getCandidates().length!=2)
@@ -904,15 +1002,15 @@ public class Sudoku {
                 Sudoku branch1=tryAssumption(i,j,candidates[0]),branch2=tryAssumption(i,j,candidates[1]);
                 boolean contradiction1=branch1.hasContradictionSilently(),contradiction2=branch2.hasContradictionSilently();
                 if(contradiction1 && contradiction2){
-                    System.out.println("Forcing chain: the sudoku has no solution because neither candidate fits in cell "+cells[i][j].getPosition());
+                    System.out.println("Forcing net: the sudoku has no solution because neither candidate fits in cell "+cells[i][j].getPosition());
                     cells[i][j].removeCandidates(candidates);//the cell is left without candidates: solve() notices it with hasContradiction()
                     return true;
                 }
                 if(contradiction1 || contradiction2){
                     int right=contradiction1 ? candidates[1] : candidates[0],wrong=contradiction1 ? candidates[0] : candidates[1];
-                    System.out.println("Applied forcing chain: placing "+wrong+" in cell "+cells[i][j].getPosition()+" leads to a contradiction, so "+right+" goes there");
+                    System.out.println("Applied forcing net: placing "+wrong+" in cell "+cells[i][j].getPosition()+" leads to a contradiction, so "+right+" goes there");
                     Cell changed[]=setNumber(i,j,right);
-                    Sudoku.postForcingChain(right,changed,this.cells);
+                    Sudoku.postForcingNet(right,changed,this.cells);
                     return true;
                 }
                 //both assumptions are possible: look for digits placed by both branches
@@ -928,7 +1026,7 @@ public class Sudoku {
                             Cell peers[]=getCell(k).commonPeers(getCell(h),this.cells);
                             for(int q=0;q<peers.length;q++)
                                 if(peers[q].removeCandidate(number)){
-                                    System.out.println("Applied forcing chain (cell "+cells[i][j].getPosition()+"): digit "+number+" cannot go in cell "+peers[q].getPosition());
+                                    System.out.println("Applied forcing net (cell "+cells[i][j].getPosition()+"): digit "+number+" cannot go in cell "+peers[q].getPosition());
                                     if(count[number]<size*size)
                                         changed[number][count[number]++]=peers[q];
                                     applied=true;
@@ -938,7 +1036,7 @@ public class Sudoku {
                 if(applied){
                     for(int number=1;number<=size;number++)
                         if(count[number]>0)
-                            Sudoku.postForcingChain(number,Utils.truncate(changed[number],count[number]),this.cells);
+                            Sudoku.postForcingNet(number,Utils.truncate(changed[number],count[number]),this.cells);
                     return true;
                 }
             }
@@ -1009,7 +1107,7 @@ public class Sudoku {
      *   <li>if the copy ends in a contradiction the candidate is wrong and is removed from the cell;</li>
      *   <li>if the copy gets solved the candidate is the right one and is placed.</li>
      * </ul>
-     * The copies print nothing; they can themselves use forcing chains and trial and error.
+     * The copies print nothing; they can themselves use forcing nets and trial and error.
      * @return true if a candidate has been removed or a digit placed
      */
     public boolean trialAndError(){

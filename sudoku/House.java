@@ -374,24 +374,4 @@ public class House extends Group{
         }
         return applied;
     }
-    /**
-     * Old helper of the colouring technique (not used by the solver any more, see Sudoku.simpleColoring()):
-     * {@code number} can go in exactly two cells of the house and at least one of them is already coloured:
-     * the other one gets the opposite colour.
-     * @return true if a cell has been coloured
-     */
-    public boolean colorConjugatePair(int number){
-        boolean applied=false;
-        if(cellsFor(number)[0].getSymbol()=='-'){
-            System.out.println("Colouring with A or B the cell "+indicesFor(number)[0]);
-            applied=true;
-            cellsFor(number)[0].setSymbol(Utils.oppositeColor(cellsFor(number)[1].getSymbol()));
-        }else if(cellsFor(number)[1].getSymbol()=='-'){
-            applied=true;
-            System.out.println("Colouring with A or B the cell "+indicesFor(number)[1]);
-            cellsFor(number)[1].setSymbol(Utils.oppositeColor(cellsFor(number)[0].getSymbol()));
-        }else
-            System.out.println("Called House.colorConjugatePair(number), but the house already has both A and B");
-        return applied;
-    }
 }
