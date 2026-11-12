@@ -70,6 +70,9 @@ public class Sudoku {
     private Column columns[];
     private Box boxes[];
     private boolean logicOnly=false;//true in the copies created by forcingNet(): solve() then uses only the logical techniques
+    //true once the uniqueness of the solution has been checked. The copies made by copy() start with true: they contain
+    //an assumption that may be wrong, and must be solved logically even when they have no solution
+    private boolean uniquenessChecked=false;
 
     public void setSize(int size) {
         this.size = size;
@@ -412,9 +415,24 @@ public class Sudoku {
     /**
      * Solves the sudoku: the techniques are tried from the simplest to the hardest and, as soon as one of them
      * makes progress, the search starts again from the simplest one.
+     * Before the first technique, the sudoku is checked with a fast backtracking ({@link SolutionCounter}):
+     * if it has no solution or more than one solution the user is told and nothing else is done.
      * @return true if the sudoku has been solved
      */
     public boolean solve(){
+        if(uniquenessChecked==false){
+            uniquenessChecked=true;//solve() calls itself after every step: the check is done only the first time
+            int solutions=new SolutionCounter(this).countSolutions(2);
+            if(solutions==0){
+                System.out.println("The sudoku has no solution: it cannot be solved");
+                return false;
+            }
+            if(solutions>1){
+                System.out.println("The sudoku has more than one solution: a proper sudoku must have exactly one, so it is not solved");
+                return false;
+            }
+            System.out.println("The sudoku has exactly one solution: starting the logical solution");
+        }
         if(hasContradiction()){//happens only in the copies made by trialAndError()/forcingNet() with a wrong digit (or if the input is invalid)
             System.out.println("The sudoku has no solution");
             return false;
@@ -1076,6 +1094,7 @@ public class Sudoku {
      */
     public Sudoku copy(){
         Sudoku copy=new Sudoku(size);
+        copy.uniquenessChecked=true;//the copies are never checked for uniqueness
         for(int i=0;i<size;i++)
             for(int j=0;j<size;j++)
                 if(cells[i][j].getNumber()!=0)

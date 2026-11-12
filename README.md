@@ -5,7 +5,11 @@ explaining every step it makes. Guessing (trial and error) is used only as the l
 
 ## Techniques
 
-`Sudoku.solve()` tries the techniques from the simplest to the hardest. As soon as one of them makes progress
+Before solving, `Sudoku.solve()` checks with a fast backtracking search (`SolutionCounter`: bit masks and
+minimum-remaining-values heuristic, stopping at two solutions) that the sudoku has exactly one solution.
+If it has no solution or more than one, the user is told and nothing else is done.
+
+Then `Sudoku.solve()` tries the techniques from the simplest to the hardest. As soon as one of them makes progress
 (places a digit or removes a candidate), the solver starts again from the first one.
 
 | #  | Technique                                        | Where                            |
@@ -50,6 +54,7 @@ techniques only (no forcing net and no trial and error), the other 2 need the fo
 - `sudoku/House.java` – a row, column or box, with the techniques that work inside a house
 - `sudoku/Patterns.java` – Unique Rectangle, Two-String Kite, Finned Fish, W-Wing, XYZ-Wing, Multi-Coloring
 - `sudoku/Chains.java` – X-Cycles, AIC, ALS-XZ, Forcing Chains
+- `sudoku/SolutionCounter.java` – fast backtracking solution counter used for the uniqueness check
 - `sudoku/CandidateGrid.java` – bit mask snapshot of the candidates used by `Patterns` and `Chains`
 - `sudoku/Row.java`, `sudoku/Column.java`, `sudoku/Box.java`, `sudoku/HouseType.java` – the three kinds of house
 - `utils/Utils.java` – array and geometry helpers
