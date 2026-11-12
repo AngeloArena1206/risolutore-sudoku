@@ -396,3 +396,8 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Java build (Maven / TeaVM) and the generated JavaScript solver, rebuilt by the GitHub Actions workflow
+target/
+out/
+web/solver/

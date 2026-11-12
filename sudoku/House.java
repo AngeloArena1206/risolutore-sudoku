@@ -164,6 +164,12 @@ public class House extends Group{
             boolean applied=false;
             for(int i=0;i<getSize();i++)
                 if(Utils.contains(chosen,i)==false && getCell(i).getNumber()==0 && getCell(i).removeCandidates(numbers).length>0){
+                    if(applied==false){//describe the pattern once, before the first elimination
+                        Cell cells[]=new Cell[chosen.length];
+                        for(int k=0;k<chosen.length;k++)
+                            cells[k]=getCell(chosen[k]);
+                        System.out.println("Naked subset in "+label()+": cells: "+positions(cells)+" contain only digits "+digits(numbers));
+                    }
                     System.out.println("Applied naked subset in "+label()+": removing candidates from cell "+getCell(i).getPosition());
                     applied=true;
                 }
@@ -200,6 +206,8 @@ public class House extends Group{
             for(int i=0;i<peers.length;i++){//remove the digits of the subset from those cells
                 int removed[]=peers[i].removeCandidates(numbers);
                 if(removed.length>0){
+                    if(applied==false)//describe the pattern once, before the first elimination
+                        System.out.println(describeSubset(numbers,subsetCells));
                     System.out.print("Applied subset: removing candidates from cell "+peers[i].getPosition()+". Removed candidates: ");
                     for(int j=0;j<removed.length;j++)
                         System.out.print(removed[j]+" ");
@@ -211,10 +219,14 @@ public class House extends Group{
             if(count>0)
                 Sudoku.postSubsets(numbers,Utils.truncate(changed,count),grid);
             int others[]=Utils.complementNumbers(numbers,getSize());
+            boolean described=false;//described again here: the cascade above may have printed other steps in between
             for(int i=0;i<subsetCells.length;i++){//remove every other digit from the cells of the subset
                 int removed[]=subsetCells[i].removeCandidates(others);
                 if(removed.length>0){
-                    System.out.print("Applied subset: removing candidates from cell "+subsetCells[i].getPosition()+". Candidates: ");
+                    if(described==false && (applied==false || count>0))
+                        System.out.println(describeSubset(numbers,subsetCells));
+                    described=true;
+                    System.out.print("Applied subset: removing candidates from cell "+subsetCells[i].getPosition()+". Removed candidates: ");
                     for(int j=0;j<removed.length;j++)
                         System.out.print(removed[j]+" ");
                     System.out.println("");
@@ -223,6 +235,24 @@ public class House extends Group{
             }
         }
         return applied;
+    }
+    /** description of a subset for the log, e.g. "Subset in row 3: digits 2, 7 can only go in cells: 28, 31" */
+    private String describeSubset(int numbers[],Cell cells[]){
+        return "Subset in "+label()+": digits "+digits(numbers)+" can only go in cells: "+positions(cells);
+    }
+    /** "2, 7" */
+    private static String digits(int numbers[]){
+        String s="";
+        for(int i=0;i<numbers.length;i++)
+            s+=(i>0?", ":"")+numbers[i];
+        return s;
+    }
+    /** positions of the cells separated by commas, e.g. "28, 31" */
+    private static String positions(Cell cells[]){
+        String s="";
+        for(int i=0;i<cells.length;i++)
+            s+=(i>0?", ":"")+cells[i].getPosition();
+        return s;
     }
     /**
      * X-WING and its generalisations SWORDFISH (3 houses) and JELLYFISH (4 houses), i.e. basic fish.

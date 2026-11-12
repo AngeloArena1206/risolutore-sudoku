@@ -3,6 +3,52 @@
 A sudoku solver written in Java that solves puzzles the way a human does: with logical techniques,
 explaining every step it makes. Guessing (trial and error) is used only as the last resort.
 
+It is also a web app that can be installed on a phone (PWA): the Java solver is compiled to JavaScript with
+[TeaVM](https://teavm.org) and runs entirely on the device, offline too.
+
+## Web app
+
+A sudoku can be entered in three ways:
+
+- **Take a photo** with the camera of the phone;
+- **Upload a file**: a photo/screenshot of a sudoku, or a text file (`.txt`, `.sdk`, `.ss`, `.csv`...) with the
+  81 digits, using `0` or `.` for the empty cells;
+- **Type it in** on the grid (on a computer the keyboard, arrow keys and paste also work).
+
+From a photo the app finds the grid (its corners can be moved by hand), reads the digits and highlights in yellow
+the ones it is not sure about, so that they can be checked before solving. Photo reading is done in the browser:
+no image leaves the device.
+
+The solution is shown step by step: for every step the technique, its explanation and the cells involved are
+highlighted on the grid. Puzzles with no solution or with more than one solution are reported.
+
+To install it: open the page on the phone and choose *Install app* (Android/Chrome) or
+*Share → Add to Home Screen* (iPhone/Safari).
+
+### Building and running locally
+
+Requirements: JDK 21 and Maven.
+
+```sh
+mvn package                       # compiles the solver to web/solver/solver.js
+cd web && python -m http.server 8000
+```
+
+then open <http://localhost:8000>. The page must be served over HTTP (or HTTPS), not opened as a file,
+because it uses JavaScript modules, a Web Worker and a service worker.
+
+The workflow `.github/workflows/pages.yml` builds the app and publishes it on GitHub Pages at every push on `main`
+(enable it once in *Settings → Pages → Source: GitHub Actions*).
+
+Web app files:
+
+- `webapp/WebSolver.java` – entry point compiled by TeaVM: solves a sudoku and returns the result and the steps as JSON
+- `pom.xml` – Maven/TeaVM build
+- `web/index.html`, `web/css/app.css`, `web/js/app.js` – the user interface
+- `web/js/ocr.js` – grid detection, perspective correction and digit recognition for photos
+- `web/js/solver-worker.js` – runs the solver in a Web Worker so that the page stays responsive
+- `web/sw.js`, `web/manifest.webmanifest`, `web/icons/` – offline support and installation
+
 ## Techniques
 
 Before solving, `Sudoku.solve()` checks with a fast backtracking search (`SolutionCounter`: bit masks and

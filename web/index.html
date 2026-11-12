@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sudoku Solver</title>
+  <meta name="description" content="Solve any sudoku like a human: take a photo, upload a file or type it in, and follow every logical step.">
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Sudoku">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="30" height="30">
+      <h1>Sudoku Solver</h1>
+    </div>
+    <div class="top-actions">
+      <button id="install-btn" class="chip-btn" hidden data-i18n="install">Install app</button>
+      <button id="lang-btn" class="chip-btn" aria-label="Language">IT</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- the three ways to enter a sudoku -->
+    <nav class="input-modes" aria-label="Input">
+      <button class="mode" id="mode-camera" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        <span data-i18n="takePhoto">Take a photo</span>
+      </button>
+      <button class="mode" id="mode-upload" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v5h16v-5"/></svg>
+        <span data-i18n="upload">Upload file or photo</span>
+      </button>
+      <button class="mode" id="mode-manual" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9.33 4v16M14.67 4v16M4 9.33h16M4 14.67h16"/></svg>
+        <span data-i18n="manual">Enter manually</span>
+      </button>
+      <input type="file" id="file-input" accept="image/*,.txt,.sdk,.ss,.sdm,.csv,text/plain" hidden>
+      <input type="file" id="capture-input" accept="image/*" capture="environment" hidden>
+    </nav>
+
+    <section class="card" id="board-card">
+      <div id="status" class="status" role="status" hidden></div>
+      <div class="board-wrap">
+        <div id="board" class="board" role="grid" aria-label="Sudoku"></div>
+      </div>
+      <div class="board-tools">
+        <label class="toggle" id="photo-toggle" hidden>
+          <input type="checkbox" id="photo-check">
+          <span data-i18n="comparePhoto">Show the photo under the grid</span>
+        </label>
+      </div>
+      <div id="numpad" class="numpad" aria-label="Digits"></div>
+      <div class="actions">
+        <button id="clear-btn" class="btn secondary" type="button" data-i18n="clear">Clear</button>
+        <button id="edit-btn" class="btn secondary" type="button" data-i18n="edit" hidden>Edit</button>
+        <button id="solve-btn" class="btn primary" type="button" data-i18n="solve">Solve</button>
+      </div>
+    </section>
+
+    <section class="card" id="steps-card" hidden>
+      <h2 data-i18n="steps">Solution steps</h2>
+      <div id="technique-chips" class="chips"></div>
+      <div class="stepper">
+        <button id="first-btn" class="icon-btn" type="button" aria-label="First step">&#x23EE;</button>
+        <button id="prev-btn" class="icon-btn" type="button" aria-label="Previous step">&#x25C0;</button>
+        <span id="step-counter" class="step-counter"></span>
+        <button id="next-btn" class="icon-btn" type="button" aria-label="Next step">&#x25B6;</button>
+        <button id="last-btn" class="icon-btn" type="button" aria-label="Solution">&#x23ED;</button>
+      </div>
+      <div id="step-current" class="step-current"></div>
+      <details class="all-steps">
+        <summary data-i18n="allSteps">All steps</summary>
+        <ol id="steps-list" class="steps-list"></ol>
+      </details>
+    </section>
+
+    <p class="footnote" data-i18n="footnote">The solver runs on your device: the photos never leave it.</p>
+  </main>
+
+  <!-- live camera -->
+  <div id="camera-view" class="overlay dark" hidden>
+    <video id="camera-video" playsinline autoplay muted></video>
+    <div class="camera-guide" aria-hidden="true"></div>
+    <p class="overlay-hint" data-i18n="cameraHint">Frame the sudoku inside the square</p>
+    <div class="overlay-actions">
+      <button id="camera-cancel" class="btn secondary" type="button" data-i18n="cancel">Cancel</button>
+      <button id="camera-shoot" class="shutter" type="button" aria-label="Take photo"></button>
+      <button id="camera-file" class="btn secondary" type="button" data-i18n="gallery">Gallery</button>
+    </div>
+  </div>
+
+  <!-- corner adjustment -->
+  <div id="crop-view" class="overlay dark" hidden>
+    <p class="overlay-hint" data-i18n="cropHint">Drag the four corners onto the corners of the grid</p>
+    <div class="crop-stage" id="crop-stage">
+      <canvas id="crop-canvas"></canvas>
+    </div>
+    <div class="overlay-actions">
+      <button id="crop-cancel" class="btn secondary" type="button" data-i18n="cancel">Cancel</button>
+      <button id="crop-read" class="btn primary" type="button" data-i18n="readDigits">Read digits</button>
+    </div>
+  </div>
+
+  <!-- busy indicator -->
+  <div id="busy" class="overlay busy" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="busy-text"></p>
+    <button id="busy-cancel" class="btn secondary" type="button" data-i18n="cancel">Cancel</button>
+  </div>
+
+  <div id="toast" class="toast" role="alert" hidden></div>
+
+  <noscript>This app needs JavaScript.</noscript>
+</body>
+</html>

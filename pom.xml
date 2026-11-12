@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Build of the web app.
+  The Java solver (packages sudoku and utils) and the web entry point (package webapp) are compiled to
+  JavaScript by TeaVM into web/solver/solver.js. The web app itself is the folder web/.
+
+  Build:   ./mvnw package        (Windows: mvnw.cmd package)
+  Run:     serve the folder web/ with any static web server
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>sudoku</groupId>
+  <artifactId>sudoku-solver</artifactId>
+  <version>1.0</version>
+  <packaging>jar</packaging>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+    <teavm.version>0.16.0</teavm.version>
+  </properties>
+
+  <dependencies>
+    <!-- Java class library emulated by TeaVM in the browser -->
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-classlib</artifactId>
+      <version>${teavm.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <!-- annotations to export Java methods to JavaScript -->
+    <dependency>
+      <groupId>org.teavm</groupId>
+      <artifactId>teavm-jso</artifactId>
+      <version>${teavm.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- the packages are folders in the root of the repository -->
+    <sourceDirectory>${project.basedir}</sourceDirectory>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <includes>
+            <include>sudoku/**/*.java</include>
+            <include>utils/**/*.java</include>
+            <include>webapp/**/*.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.teavm</groupId>
+        <artifactId>teavm-maven-plugin</artifactId>
+        <version>${teavm.version}</version>
+        <executions>
+          <execution>
+            <id>web-solver</id>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <mainClass>webapp.WebSolver</mainClass>
+              <targetDirectory>${project.basedir}/web/solver</targetDirectory>
+              <targetFileName>solver.js</targetFileName>
+              <jsModuleType>ES2015</jsModuleType>
+              <minifying>true</minifying>
+              <optimizationLevel>FULL</optimizationLevel>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

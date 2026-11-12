@@ -402,26 +402,17 @@ public class Sudoku {
     // ------------------------------------------------------------------
 
     /**
-     * Called after a technique has made progress: stops if the sudoku is solved, otherwise restarts the chain
-     * of techniques from the beginning.
-     */
-    private boolean solveAgain(){
-        if(isSolved() && hasContradiction()==false){
-            System.out.println("Sudoku solved");
-            return true;
-        }
-        return solve();
-    }
-    /**
      * Solves the sudoku: the techniques are tried from the simplest to the hardest and, as soon as one of them
-     * makes progress, the search starts again from the simplest one.
+     * makes progress, the search starts again from the simplest one (see {@link #applyNextTechnique()}).
      * Before the first technique, the sudoku is checked with a fast backtracking ({@link SolutionCounter}):
      * if it has no solution or more than one solution the user is told and nothing else is done.
+     * The steps are repeated in a loop (not with recursion), so even a very long solution does not grow the stack:
+     * this matters in the web version, where the stack of the browser is small.
      * @return true if the sudoku has been solved
      */
     public boolean solve(){
         if(uniquenessChecked==false){
-            uniquenessChecked=true;//solve() calls itself after every step: the check is done only the first time
+            uniquenessChecked=true;//the check is done only once
             int solutions=new SolutionCounter(this).countSolutions(2);
             if(solutions==0){
                 System.out.println("The sudoku has no solution: it cannot be solved");
@@ -433,57 +424,71 @@ public class Sudoku {
             }
             System.out.println("The sudoku has exactly one solution: starting the logical solution");
         }
-        if(hasContradiction()){//happens only in the copies made by trialAndError()/forcingNet() with a wrong digit (or if the input is invalid)
-            System.out.println("The sudoku has no solution");
-            return false;
+        while(true){
+            if(hasContradiction()){//happens only in the copies made by trialAndError()/forcingNet() with a wrong digit (or if the input is invalid)
+                System.out.println("The sudoku has no solution");
+                return false;
+            }
+            if(applyNextTechnique()==false){//no technique makes progress any more
+                if(isSolved()==false)
+                    System.out.println("The available techniques are not enough to solve the sudoku");
+                return false;
+            }
+            if(isSolved() && hasContradiction()==false){
+                System.out.println("Sudoku solved");
+                return true;
+            }
         }
-        //the techniques are tried in increasing order of difficulty
+    }
+    /**
+     * Tries the techniques in increasing order of difficulty and stops at the first one that makes progress.
+     * @return true if a technique has placed a digit or removed a candidate
+     */
+    private boolean applyNextTechnique(){
         if(hiddenSingle())
-            return solveAgain();
+            return true;
         if(nakedSingle())
-            return solveAgain();
+            return true;
         if(lockedCandidates())
-            return solveAgain();
+            return true;
         if(subsets())
-            return solveAgain();
+            return true;
         if(xWing())//X-Wing, Swordfish, Jellyfish
-            return solveAgain();
+            return true;
         if(new Patterns(this).uniqueRectangle())
-            return solveAgain();
+            return true;
         if(remotePairs())//must come before simple colouring, which would make it useless
-            return solveAgain();
+            return true;
         if(skyscraper())
-            return solveAgain();
+            return true;
         if(new Patterns(this).twoStringKite())
-            return solveAgain();
+            return true;
         if(new Patterns(this).finnedFish())
-            return solveAgain();
+            return true;
         if(simpleColoring())
-            return solveAgain();
+            return true;
         if(new Patterns(this).wWing())
-            return solveAgain();
+            return true;
         if(xyWing())
-            return solveAgain();
+            return true;
         if(new Patterns(this).xyzWing())
-            return solveAgain();
+            return true;
         if(new Patterns(this).multiColoring())
-            return solveAgain();
+            return true;
         if(new Chains(this).xCycles())
-            return solveAgain();
+            return true;
         if(xyChain())//generalisation of the XY-Wing
-            return solveAgain();
+            return true;
         if(new Chains(this).aic())
-            return solveAgain();
+            return true;
         if(new Chains(this).alsXz())
-            return solveAgain();
+            return true;
         if(new Chains(this).forcingChains())
-            return solveAgain();
+            return true;
         if(logicOnly==false && forcingNet())//second-to-last resort; the copies created by forcingNet() use only logic
-            return solveAgain();
+            return true;
         if(logicOnly==false && isSolved()==false && trialAndError())//last resort
-            return solveAgain();
-        if(isSolved()==false)
-            System.out.println("The available techniques are not enough to solve the sudoku");
+            return true;
         return false;
     }
 
